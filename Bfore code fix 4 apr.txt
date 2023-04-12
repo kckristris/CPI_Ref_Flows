@@ -1,0 +1,177 @@
+/*---Developer  : 
+ *---Date       : 15 Nov 2022
+ *---Description: This groovy script sends information of employee time calendar 
+ */
+ 
+import com.sap.gateway.ip.core.customdev.util.Message;
+import java.util.HashMap;
+import java.util.List;
+//import java.util.ArrayList;
+//import java.text.SimpleDateFormat  //DF
+
+def Message processData(Message message) {
+
+//for debug
+    def messageLog = messageLogFactory.getMessageLog(message);
+	
+//Read Body
+	def msgBody = message.getBody(java.lang.String)
+    def root = new XmlSlurper().parseText(msgBody)
+
+    //Read Property
+	def map = message.getProperties();
+//Fetching Hashmap properties
+    def mapPPStartDate = map.get("PPStartDate")
+    def PPStartDate = ""
+    
+//Field declarations    
+	def final_data =""
+	def company = ""
+    def per_no = ""
+    def phy_st_Dt = ""  //date of absence
+    def from_time = ""
+    def to_time = ""
+    def timeType = ""
+    def absence = ""
+    def booking_ind = ""
+    def del_ind = ""
+    def daily_prog = "" 
+    def costcenter = ""
+    def addition1 = ""
+    def supplement2 = "" 
+    def addition3 = ""
+    def addition4 = ""
+    def addition5 = ""
+    def proj_no = ""
+    def pack = ""
+  
+    def temp = "" //for stroring value temporary
+    def total_transfer = 0
+        //setting header
+	//	final_data = "company"+";"+"per_no"+";"+"phy_st_Dt"+";"+"from_time"+";"+"to_time"+"timeType"+";"+"absence"+";"+"booking_ind"+";"+"del_ind"+"daily_prog"+";"+"costcenter"+";"+"addition1"+";"+"supplement2"+";"+"addition3"+";"+"addition4"+";"+"addition5"+";"+"proj_no"+";"+"pack"+"\n"
+		for(int i=0;i<root.EmployeeTime.size();i++)   //Loop1
+		{
+		    //fetching hashmap values
+            PPStartDate = mapPPStartDate.get(root.EmployeeTime[i].EmpJob.payGroup.text())
+		    //only appval status to consider
+		    if((root.EmployeeTime[i].approvalStatus.text() == 'APPROVED' || root.EmployeeTime[i].approvalStatus.text() == 'CANCELLED'))
+		    {
+		      for(int k=0;k<root.EmployeeTime[i].EmployeeTimeCalendar.size();k++)
+		      {
+		          if(root.EmployeeTime[i].EmployeeTimeCalendar[k].physicalStartDate.text() >= PPStartDate) //checking less than and eq
+		      {
+	//	    temp = root.EmployeeTime[i].EmpJob[0].customString22.text()
+	        temp = root.EmployeeTime[i].EmpJob[0].payGroup.text()
+	//	    if(temp=="21" || temp=="22" || temp=="27")
+	        if(temp=="AS")
+		     {
+		         company = "031"
+		     }
+	//	   else if(temp=="B1" || temp=="B2" || temp=="B3" || temp=="B4" || temp=="D1" || temp=="F1" || temp=="F2")
+	       else if(temp=="AT")
+		    {
+    		    company = "030"
+		    }
+		    else
+		    {
+		        company = "882"
+		    }
+		    
+		    timeType = ""
+		    timeType = root.EmployeeTime[i].timeType.text()
+            
+            if(root.EmployeeTime[i].approvalStatus.text() == "CANCELLED")
+            del_ind = "D" 
+            else 
+            del_ind = ""
+		    
+			per_no = root.EmployeeTime[i].cust_AdditionalEmpIdentifiers[0].cust_ExternalPayrollID.text()
+			
+			
+			//Time calender will be empty for specific time types like 'ho', for such cases,
+			//Get the dates and time fields from employee time data instead
+			
+			if((timeType=="ho") || (timeType=="Ho std") || (timeType=="fz") || (timeType=="dg") || (timeType=="sem"))
+			
+			{
+			
+			phy_st_Dt = ""    
+			phy_st_Dt = root.EmployeeTime[i].physicalStartDate.text()  //date of absence
+			if(phy_st_Dt != "")
+                {
+                    phy_st_Dt = phy_st_Dt.substring(8,10)+"."+phy_st_Dt.substring(5,7)+'.'+phy_st_Dt.substring(0,4)  //DD.MM.YYYY 
+                }    
+                
+            from_time =""
+			to_time =""
+
+        			from_time = root.EmployeeTime[i].startTime.text()
+        			if(from_time != "")
+                     {
+                    from_time = from_time.substring(11,16) //16:37
+                     } 
+
+        			to_time = root.EmployeeTime[i].endTime.text()
+        			if(to_time != "")
+                     {
+                    to_time = to_time.substring(11,16) //16:37
+                     }
+   
+			    
+			final_data = final_data+company+";"+per_no+";"+phy_st_Dt+";"+from_time+";"+to_time+";"+timeType+";"+absence+";"+booking_ind+";"+del_ind+";"+daily_prog+";"+costcenter+";"+addition1+";"+supplement2+";"+addition3+";"+addition4+";"+addition5+";"+proj_no+";"+pack+"\n"
+			total_transfer = total_transfer + 1
+			    
+			}
+			
+			else
+			{
+			
+			//looping inside EmployeeTimeCalendar to fetch leaves day wise
+			
+		    phy_st_Dt = ""
+			for(int j=0;j<root.EmployeeTime[i].EmployeeTimeCalendar.size();j++)   //Loop2
+			{
+			phy_st_Dt = root.EmployeeTime[i].EmployeeTimeCalendar[j].physicalStartDate.text()  //date of absence
+			if(phy_st_Dt != "")
+                {
+                    phy_st_Dt = phy_st_Dt.substring(8,10)+"."+phy_st_Dt.substring(5,7)+'.'+phy_st_Dt.substring(0,4)  //DD.MM.YYYY 
+                } 
+               
+		//		phy_st_Dt = phy_st_Dt.substring(0,4)  //DD.MM.YYYY 
+				from_time =""
+				to_time =""
+    			if(root.EmployeeTime[i].quantityInDays.text() < '1')
+    			{
+        			from_time = root.EmployeeTime[i].EmployeeTimeCalendar[j].startTime.text()
+        			if(from_time != "")
+                     {
+                    from_time = from_time.substring(11,16) //16:37
+                     } 
+
+        			to_time = root.EmployeeTime[i].EmployeeTimeCalendar[j].endTime.text()
+        			if(to_time != "")
+                     {
+                    to_time = to_time.substring(11,16) //16:37
+                     }
+
+    		    }
+		    
+    final_data = final_data+company+";"+per_no+";"+phy_st_Dt+";"+from_time+";"+to_time+";"+timeType+";"+absence+";"+booking_ind+";"+del_ind+";"+daily_prog+";"+costcenter+";"+addition1+";"+supplement2+";"+addition3+";"+addition4+";"+addition5+";"+proj_no+";"+pack+"\n"
+			total_transfer = total_transfer + 1		    
+			}//	End of Loop2
+			}
+			//
+		      }//End of if condition 'k'
+		    }//end of 'k' loop
+		    }//	End of Loop1
+		    
+		    			
+		}
+    
+      messageLog.addAttachmentAsString("FinalData", final_data, "text/plain");
+	  //messageLog.addAttachmentAsString("TotalRecord", total_transfer, "text/plain");
+	  message.setBody(final_data)
+      return message;
+
+	}
+		    
